@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom ESP32 Web Flasher</title>
+    <title>DSN ESP32 Web Flasher for NES Emulator</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f9; color: #333; }
         .container { max-width: 600px; margin: auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
@@ -12,7 +12,7 @@
         #log { background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 4px; height: 200px; overflow-y: scroll; font-family: monospace; margin-top: 20px; white-space: pre-wrap; }
     </style>
     <script type="module">
-        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
+import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.6/bundle.js';
 
         let device = null;
         let transport = null;
@@ -21,10 +21,47 @@
         const logElement = document.getElementById('log');
         const connectBtn = document.getElementById('connectBtn');
         const flashBtn = document.getElementById('flashBtn');
+        const counterElement = document.getElementById('downloadCounter');
+
+        const repoOwner = 'derdacavga';
+        const repoName = 'Esp32-Nes-Emulator';
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/releases/latest`);
+                if (!response.ok) throw new Error("Release not found");
+                
+                const releaseData = await response.json();
+                const firmwareAsset = releaseData.assets.find(a => a.name === 'firmware.bin');
+                
+                if (firmwareAsset) {
+                    counterElement.textContent = firmwareAsset.download_count;
+                } else {
+                    counterElement.textContent = "0";
+                }
+            } catch (error) {
+                console.error("Failed to fetch download counter:", error);
+                counterElement.textContent = "-";
+            }
+        });
 
         function log(msg) {
             logElement.textContent += msg + '\n';
             logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        async function downloadBin(url) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+            
+            const buffer = await response.arrayBuffer();
+            const firmwareArray = new Uint8Array(buffer);
+            let binaryString = "";
+            
+            for (let i = 0; i < firmwareArray.length; i++) {
+                binaryString += String.fromCharCode(firmwareArray[i]);
+            }
+            return binaryString;
         }
 
         connectBtn.addEventListener('click', async () => {
@@ -54,35 +91,23 @@
             }
         });
 
-        async function downloadBin(url) {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-            
-            const buffer = await response.arrayBuffer();
-            const firmwareArray = new Uint8Array(buffer);
-            let binaryString = "";
-            
-            for (let i = 0; i < firmwareArray.length; i++) {
-                binaryString += String.fromCharCode(firmwareArray[i]);
-            }
-            return binaryString;
-        }
-
         flashBtn.addEventListener('click', async () => {
             try {
                 flashBtn.disabled = true;
-                log("Fetching firmware and partition table from server...");
+                log("Fetching binaries from repository...");
                 
-                const baseUrl = 'https://raw.githubusercontent.com/derdacavga/Esp32-Nes-Emulator/main';
+                const rawBaseUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main`;
                 
-                const [partitionsStr, firmwareStr] = await Promise.all([
-                    downloadBin(`${baseUrl}/partition-table.bin`),
-                    downloadBin(`${baseUrl}/firmware.bin`)
+                const [bootloaderStr, partitionsStr, firmwareStr] = await Promise.all([
+                    downloadBin(`${rawBaseUrl}/bootloader.bin`),
+                    downloadBin(`${rawBaseUrl}/partition-table.bin`),
+                    downloadBin(`${rawBaseUrl}/firmware.bin`)
                 ]);
 
-                log("Flashing partition table and firmware...");
+                log("Flashing bootloader, partition table, and firmware...");
                 
                 const fileArray = [
+                    { data: bootloaderStr, address: 0x1000 },
                     { data: partitionsStr, address: 0x8000 },
                     { data: firmwareStr, address: 0x10000 }
                 ];
@@ -94,17 +119,28 @@
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
                         const percent = ((written / total) * 100).toFixed(1);
-                        log(`File ${fileIndex + 1} Progress: ${percent}%`);
+                        let fileName = fileIndex === 0 ? "Bootloader" : fileIndex === 1 ? "Partition Table" : "Firmware";
+                        log(`Flashing ${fileName}: ${percent}%`);
                     }
                 });
 
-                log("SUCCESS! Flashing completed.");
+                log("SUCCESS! All files flashed successfully.");
                 
                 log("Rebooting ESP32 into app...");
                 await transport.setDTR(false);
                 await new Promise(resolve => setTimeout(resolve, 100));
                 await transport.setDTR(true);
-                log("Done!");
+                log("Done! You can now test your games.");
+                
+                try {
+                    const releaseUrl = `https://github.com/${repoOwner}/${repoName}/releases/latest/download/firmware.bin`;
+                    fetch(releaseUrl, { mode: 'no-cors' });
+                } catch (e) {
+                    console.error("Counter ping failed", e);
+                }
+
+                const currentCount = parseInt(counterElement.textContent) || 0;
+                counterElement.textContent = currentCount + 1;
                 
             } catch (err) {
                 log(`Flashing failed: ${err.message}`);
@@ -119,6 +155,10 @@
 <div class="container">
     <h2>ESP32 Web Flasher Tool</h2>
     <p>Connect your ESP32 dev board via USB, click connect, then flash the firmware.</p>
+
+    <div style="background: #e3f2fd; color: #0d47a1; padding: 10px; border-radius: 5px; font-weight: bold; width: max-content; margin-bottom: 15px;">
+        🎮 Total Installations: <span id="downloadCounter">Loading...</span>
+    </div>
     
     <button id="connectBtn">1. Connect ESP32</button>
     <button id="flashBtn" disabled>2. Flash Firmware</button>
