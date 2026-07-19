@@ -9,6 +9,22 @@ Build your own following the step-by-step guide!
 
 > **Click the image above to watch the full tutorial on YouTube.**
 
+## 📺 Universal Version
+
+Source Code : https://github.com/derdacavga/DSN-Nes-Emulator-Universal
+
+[![Watch the tutorial](https://img.youtube.com/vi/SfLk6zZxBrA/0.jpg)](https://www.youtube.com/watch?v=SfLk6zZxBrA)
+
+> **Click the image above to watch the full tutorial on YouTube.**
+
+## 📺 st7789 Specified
+
+Source Code : https://github.com/derdacavga/Esp32-S3-nes-emulator-by-DSN
+
+[![Watch the tutorial](https://img.youtube.com/vi/wruJ-BESnX8/0.jpg)](https://www.youtube.com/watch?v=wruJ-BESnX8) 
+
+> **Click the image above to watch the full tutorial on YouTube.**
+
 ## Web Flasher
 
 Go to that link, connect your esp32 dev board than flash the firmware
